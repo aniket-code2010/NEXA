@@ -11,6 +11,10 @@ workflows:
         PACKAGE_NAME: "com.nexa.app"
 
     scripts:
+          - name: Generate Android platform files
+        script: |
+          flutter create --platforms=android .
+          
       - name: Get Flutter packages
         script: |
           flutter pub get
