@@ -10,7 +10,7 @@ workflows:
       vars:
         PACKAGE_NAME: "com.nexa.app"
 
-        scripts:
+    scripts:
       - name: Generate Android platform files
         script: |
           flutter create --platforms=android .
@@ -24,5 +24,6 @@ workflows:
           flutter build apk --release \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
