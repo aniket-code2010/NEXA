@@ -1,0 +1,25 @@
+workflows:
+  android-build:
+    name: NEXA Android Build
+    max_build_duration: 60
+
+    environment:
+      flutter: stable
+      groups:
+        - supabase
+      vars:
+        PACKAGE_NAME: "com.nexa.app"
+
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Build NEXA APK
+        script: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
