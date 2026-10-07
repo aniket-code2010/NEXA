@@ -5,24 +5,20 @@ import 'services/nexa_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const url = String.fromEnvironment('SUPABASE_URL');
-
-  // Support both names so Codemagic configuration works.
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const publishableKey =
       String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
-
-  const anonKey =
-      String.fromEnvironment('SUPABASE_ANON_KEY');
+  const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   final key = publishableKey.isNotEmpty ? publishableKey : anonKey;
 
-  if (url.isEmpty || key.isEmpty) {
+  if (supabaseUrl.isEmpty || key.isEmpty) {
     runApp(const NexaApp(configured: false));
     return;
   }
 
   await Supabase.initialize(
-    url: url,
+    url: supabaseUrl,
     anonKey: key,
   );
 
@@ -40,24 +36,20 @@ class NexaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'NEXA',
-      themeMode: ThemeMode.system,
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
+        brightness: Brightness.light,
         colorSchemeSeed: Colors.deepPurple,
-      ),
-      darkTheme: ThemeData.dark(
         useMaterial3: true,
-      ).copyWith(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
       ),
-      home: configured
-          ? const AuthGate()
-          : const SetupPage(),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorSchemeSeed: Colors.deepPurple,
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
+      home: configured ? const AuthGate() : const SetupPage(),
     );
   }
 }
@@ -67,14 +59,31 @@ class SetupPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'NEXA is ready.\n\n'
-            'Supabase configuration is missing.',
-            textAlign: TextAlign.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(
+                Icons.hub_rounded,
+                size: 72,
+              ),
+              SizedBox(height: 20),
+              Text(
+                'NEXA',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Supabase configuration is missing.',
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ),
@@ -87,14 +96,13 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (_, snapshot) {
-        return NexaService.user == null
-            ? const WelcomePage()
-            : const Shell();
-      },
-    );
+    final user = NexaService.user;
+
+    if (user == null) {
+      return const WelcomePage();
+    }
+
+    return const Shell();
   }
 }
 
@@ -104,46 +112,47 @@ class WelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
+      body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const Icon(
+                Icons.hub_rounded,
+                size: 90,
+              ),
+              const SizedBox(height: 24),
               const Text(
                 'NEXA',
                 style: TextStyle(
-                  fontSize: 44,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Your interests. Your people. Your internet.',
+                'One place. Everything social.',
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 17),
               ),
-              const SizedBox(height: 32),
-              FilledButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AuthPage(signUp: true),
-                    ),
-                  );
-                },
-                child: const Text('Create Account'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AuthPage(signUp: false),
-                    ),
-                  );
-                },
-                child: const Text('Log In'),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AuthPage(),
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: Text('Get Started'),
+                  ),
+                ),
               ),
             ],
           ),
@@ -154,127 +163,165 @@ class WelcomePage extends StatelessWidget {
 }
 
 class AuthPage extends StatefulWidget {
-  final bool signUp;
-
-  const AuthPage({
-    super.key,
-    required this.signUp,
-  });
+  const AuthPage({super.key});
 
   @override
   State<AuthPage> createState() => _AuthPageState();
 }
 
 class _AuthPageState extends State<AuthPage> {
-  final email = TextEditingController();
-  final password = TextEditingController();
-  final username = TextEditingController();
-  final name = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  final usernameController = TextEditingController();
+  final displayNameController = TextEditingController();
 
-  bool busy = false;
+  bool isLogin = true;
+  bool loading = false;
 
   @override
   void dispose() {
-    email.dispose();
-    password.dispose();
-    username.dispose();
-    name.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    usernameController.dispose();
+    displayNameController.dispose();
     super.dispose();
+  }
+
+  Future<void> submit() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      showMessage('Email and password are required.');
+      return;
+    }
+
+    if (!isLogin &&
+        (usernameController.text.trim().isEmpty ||
+            displayNameController.text.trim().isEmpty)) {
+      showMessage('Username and display name are required.');
+      return;
+    }
+
+    setState(() => loading = true);
+
+    try {
+      if (isLogin) {
+        await NexaService.signIn(email, password);
+      } else {
+        await NexaService.signUp(
+          email: email,
+          password: password,
+          username: usernameController.text.trim(),
+          displayName: displayNameController.text.trim(),
+        );
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const Shell(),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      showMessage('Something went wrong: $e');
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.signUp ? 'Create Account' : 'Log In',
+        title: Text(isLogin ? 'Login' : 'Create account'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            if (!isLogin) ...[
+              TextField(
+                controller: usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: displayNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: loading ? null : submit,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(isLogin ? 'Login' : 'Sign Up'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextButton(
+              onPressed: loading
+                  ? null
+                  : () {
+                      setState(() => isLogin = !isLogin);
+                    },
+              child: Text(
+                isLogin
+                    ? 'Create a new account'
+                    : 'Already have an account? Login',
+              ),
+            ),
+          ],
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          if (widget.signUp) ...[
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(
-                labelText: 'Display name',
-              ),
-            ),
-            TextField(
-              controller: username,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          TextField(
-            controller: email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-            ),
-          ),
-          TextField(
-            controller: password,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Password',
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: busy ? null : submit,
-            child: Text(
-              busy
-                  ? 'Please wait…'
-                  : widget.signUp
-                      ? 'Create Account'
-                      : 'Log In',
-            ),
-          ),
-        ],
-      ),
     );
-  }
-
-  Future<void> submit() async {
-    setState(() => busy = true);
-
-    try {
-      if (widget.signUp) {
-        await NexaService.signUp(
-          email: email.text.trim(),
-          password: password.text,
-          username: username.text.trim(),
-          displayName: name.text.trim(),
-        );
-      } else {
-        await NexaService.signIn(
-          email.text.trim(),
-          password.text,
-        );
-      }
-
-      if (mounted) {
-        Navigator.popUntil(
-          context,
-          (route) => route.isFirst,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => busy = false);
-      }
-    }
   }
 }
 
@@ -296,37 +343,77 @@ class _ShellState extends State<Shell> {
     ProfilePage(),
   ];
 
+  final titles = const [
+    'NEXA',
+    'Reels',
+    'Messages',
+    'Search',
+    'Profile',
+  ];
+
+  Future<void> createPost() async {
+    final controller = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create post'),
+          content: TextField(
+            controller: controller,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              hintText: 'What are you thinking?',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                await NexaService.createPost(controller.text);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              child: const Text('Post'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'NEXA',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        centerTitle: true,
-        leading: IconButton(
-          onPressed: () => createPost(context),
-          icon: const Icon(
-            Icons.add_circle_outline,
-          ),
-        ),
+        title: Text(titles[index]),
         actions: [
           IconButton(
+            onPressed: createPost,
+            icon: const Icon(Icons.add_box_outlined),
+            tooltip: 'Create',
+          ),
+          IconButton(
             onPressed: () {},
-            icon: const Icon(
-              Icons.notifications_none,
-            ),
+            icon: const Icon(Icons.notifications_none_rounded),
           ),
         ],
       ),
       body: pages[index],
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
-        onDestinationSelected: (i) {
-          setState(() => index = i);
+        onDestinationSelected: (value) {
+          setState(() => index = value);
         },
         destinations: const [
           NavigationDestination(
@@ -342,7 +429,7 @@ class _ShellState extends State<Shell> {
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Messages',
+            label: 'Msg',
           ),
           NavigationDestination(
             icon: Icon(Icons.search),
@@ -356,48 +443,6 @@ class _ShellState extends State<Shell> {
         ],
       ),
     );
-  }
-
-  Future<void> createPost(BuildContext context) async {
-    final controller = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Create Post'),
-        content: TextField(
-          controller: controller,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'What is on your mind?',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await NexaService.createPost(
-                controller.text,
-              );
-
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Post'),
-          ),
-        ],
-      ),
-    );
-
-    controller.dispose();
-
-    if (mounted) {
-      setState(() {});
-    }
   }
 }
 
@@ -417,95 +462,76 @@ class _HomePageState extends State<HomePage> {
     future = NexaService.feed();
   }
 
+  Future<void> refresh() async {
+    setState(() {
+      future = NexaService.feed();
+    });
+    await future;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: future,
-      builder: (_, snapshot) {
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+    return RefreshIndicator(
+      onRefresh: refresh,
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Could not load feed.\n\n${snapshot.error}',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          );
-        }
-
-        final posts = snapshot.data ?? [];
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {
-              future = NexaService.feed();
-            });
-            await future;
-          },
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              const Text(
-                'For You',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 45,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: const [
-                    Chip(
-                      label: Text('Technology'),
-                    ),
-                    SizedBox(width: 8),
-                    Chip(
-                      label: Text('Cars'),
-                    ),
-                    SizedBox(width: 8),
-                    Chip(
-                      label: Text('Music'),
-                    ),
-                    SizedBox(width: 8),
-                    Chip(
-                      label: Text('Travel'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (posts.isEmpty)
-                const Card(
+          if (snapshot.hasError) {
+            return ListView(
+              children: [
+                const SizedBox(height: 120),
+                Center(
                   child: Padding(
-                    padding: EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
                     child: Text(
-                      'No posts yet. Create the first NEXA post!',
+                      'Could not load feed.\n\n${snapshot.error}',
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
-              ...posts.map(
-                (post) => PostCard(post: post),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            );
+          }
+
+          final posts = snapshot.data ?? [];
+
+          if (posts.isEmpty) {
+            return ListView(
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
+                      'No posts yet.\nCreate the first post on NEXA!',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.only(bottom: 20),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              return PostCard(post: posts[index]);
+            },
+          );
+        },
+      ),
     );
   }
 }
 
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final Map<String, dynamic> post;
 
   const PostCard({
@@ -514,66 +540,198 @@ class PostCard extends StatelessWidget {
   });
 
   @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  bool liking = false;
+  bool commenting = false;
+
+  Future<void> likePost() async {
+    if (liking) return;
+
+    setState(() => liking = true);
+
+    try {
+      await NexaService.like(
+        widget.post['id'].toString(),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Like failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => liking = false);
+      }
+    }
+  }
+
+  Future<void> addComment() async {
+    final controller = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Comment'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Write a comment...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: commenting
+                  ? null
+                  : () async {
+                      setState(() => commenting = true);
+
+                      try {
+                        await NexaService.comment(
+                          widget.post['id'].toString(),
+                          controller.text,
+                        );
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Comment failed: $e'),
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => commenting = false);
+                        }
+                      }
+                    },
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final profile =
-        post['profiles'] is Map
-            ? post['profiles'] as Map
-            : {};
+    final profile = widget.post['profiles'];
+    String username = 'NEXA user';
+    String displayName = 'NEXA user';
+
+    if (profile is Map<String, dynamic>) {
+      username = profile['username']?.toString() ?? 'NEXA user';
+      displayName =
+          profile['display_name']?.toString() ?? username;
+    }
+
+    final text = widget.post['text']?.toString() ?? '';
+    final createdAt = widget.post['created_at']?.toString() ?? '';
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              (profile['display_name'] ??
-                      profile['username'] ??
-                      'NEXA')
-                  .toString(),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
+            Row(
+              children: [
+                const CircleAvatar(
+                  child: Icon(Icons.person),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '@$username',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (_) {},
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'not_interested',
+                      child: Text('Not interested'),
+                    ),
+                    PopupMenuItem(
+                      value: 'report',
+                      child: Text('Report'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (text.isNotEmpty)
+              Text(
+                text,
+                style: const TextStyle(fontSize: 16),
               ),
-            ),
+            if (createdAt.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                createdAt,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall,
+              ),
+            ],
             const SizedBox(height: 8),
-            Text(
-              (post['text'] ?? '').toString(),
-            ),
             Row(
               children: [
                 IconButton(
-                  onPressed: () async {
-                    await NexaService.like(
-                      post['id'].toString(),
-                    );
-                  },
+                  onPressed: liking ? null : likePost,
                   icon: const Icon(
                     Icons.favorite_border,
                   ),
                 ),
                 IconButton(
-                  onPressed: () => _comment(context),
+                  onPressed: addComment,
                   icon: const Icon(
                     Icons.comment_outlined,
                   ),
                 ),
                 IconButton(
                   onPressed: () {},
-                  icon: const Icon(Icons.repeat),
-                ),
-                IconButton(
-                  onPressed: () {},
                   icon: const Icon(
-                    Icons.bookmark_border,
+                    Icons.repeat,
                   ),
                 ),
-                const Spacer(),
                 IconButton(
                   onPressed: () {},
                   icon: const Icon(
-                    Icons.more_horiz,
+                    Icons.share_outlined,
                   ),
                 ),
               ],
@@ -583,47 +741,6 @@ class PostCard extends StatelessWidget {
       ),
     );
   }
-
-  Future<void> _comment(
-    BuildContext context,
-  ) async {
-    final controller = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Comment'),
-        content: TextField(
-          controller: controller,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Write a comment...',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await NexaService.comment(
-                post['id'].toString(),
-                controller.text,
-              );
-
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
-      ),
-    );
-
-    controller.dispose();
-  }
 }
 
 class ReelsPage extends StatelessWidget {
@@ -632,12 +749,29 @@ class ReelsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text(
-        'NEXA Reels\nInterest + AI discovery',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.play_circle_outline,
+              size: 70,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'NEXA Reels',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Short-video system will be added next.',
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
@@ -650,31 +784,31 @@ class MessagesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      children: const [
+      padding: const EdgeInsets.all(16),
+      children: [
         ListTile(
-          leading: CircleAvatar(
+          leading: const CircleAvatar(
             child: Icon(Icons.person),
           ),
-          title: Text('Chats'),
-          subtitle: Text('1-to-1 messaging'),
-        ),
-        ListTile(
-          leading: CircleAvatar(
-            child: Icon(Icons.groups),
+          title: const Text('NEXA Messages'),
+          subtitle: const Text(
+            'Chat system will be added next.',
           ),
-          title: Text('Communities'),
-          subtitle: Text(
-            'Interest-based spaces',
+          trailing: IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.more_vert),
           ),
         ),
+        const Divider(),
         ListTile(
-          leading: CircleAvatar(
-            child: Icon(
-              Icons.mark_email_unread_outlined,
-            ),
-          ),
-          title: Text('Requests'),
-          subtitle: Text('Message requests'),
+          leading: const Icon(Icons.visibility_off_outlined),
+          title: const Text('Hidden chats'),
+          onTap: () {},
+        ),
+        ListTile(
+          leading: const Icon(Icons.groups_outlined),
+          title: const Text('Communities'),
+          onTap: () {},
         ),
       ],
     );
@@ -689,19 +823,28 @@ class SearchPage extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
-        children: const [
+        children: [
           TextField(
             decoration: InputDecoration(
-              hintText: 'Search NEXA or the web',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              hintText: 'Search NEXA',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
-          SizedBox(height: 20),
-          Text(
-            'AI Overview → Reels → Posts → People → '
-            'Communities → Web',
-            textAlign: TextAlign.center,
+          const SizedBox(height: 24),
+          const Icon(
+            Icons.travel_explore,
+            size: 64,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Search everything on NEXA',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -712,179 +855,82 @@ class SearchPage extends StatelessWidget {
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
+  Future<void> signOut(BuildContext context) async {
+    try {
+      await NexaService.signOut();
+
+      if (!context.mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const WelcomePage(),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sign out failed: $e'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = NexaService.user;
+
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       children: [
         const CircleAvatar(
-          radius: 44,
+          radius: 48,
           child: Icon(
             Icons.person,
-            size: 44,
+            size: 48,
           ),
         ),
-        const SizedBox(height: 12),
-        Text(
-          NexaService.user?.email ?? 'NEXA User',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            user?.email ?? 'NEXA User',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: () {},
-          child: const Text('Edit Profile'),
-        ),
-        OutlinedButton(
-          onPressed: () async {
-            await NexaService.signOut();
-          },
-          child: const Text('Log Out'),
-        ),
-        OutlinedButton(
-          onPressed: () {},
-          child: const Text('Privacy & Security'),
-        ),
-        OutlinedButton(
-          onPressed: () {},
-          child: const Text(
-            'Feed & AI Personalization',
+        const SizedBox(height: 24),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit profile'),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Password & Security'),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Settings'),
+                onTap: () {},
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Log out'),
+                onTap: () => signOut(context),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 }
-    body: ListView(padding: const EdgeInsets.all(20), children: [
-      if (widget.signUp) ...[
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Display name')),
-        TextField(controller: username, decoration: const InputDecoration(labelText: 'Username')),
-      ],
-      TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')),
-      TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
-      const SizedBox(height: 20),
-      FilledButton(onPressed: busy ? null : submit, child: Text(busy ? 'Please wait…' : widget.signUp ? 'Create Account' : 'Log In')),
-    ]),
-  );
-  Future<void> submit() async {
-    setState(() => busy = true);
-    try {
-      if (widget.signUp) {
-        await NexaService.signUp(email: email.text.trim(), password: password.text, username: username.text.trim(), displayName: name.text.trim());
-      } else {
-        await NexaService.signIn(email.text.trim(), password.text);
-      }
-      if (mounted) Navigator.popUntil(context, (r) => r.isFirst);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-    } finally { if (mounted) setState(() => busy = false); }
-  }
-}
-
-class Shell extends StatefulWidget {
-  const Shell({super.key});
-  @override State<Shell> createState() => _ShellState();
-}
-class _ShellState extends State<Shell> {
-  int index = 0;
-  final pages = const [HomePage(), ReelsPage(), MessagesPage(), SearchPage(), ProfilePage()];
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('NEXA', style: TextStyle(fontWeight: FontWeight.w900)),
-      centerTitle: true,
-      leading: IconButton(onPressed: () => createPost(context), icon: const Icon(Icons.add_circle_outline)),
-      actions: [IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none))],
-    ),
-    body: pages[index],
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: index, onDestinationSelected: (i) => setState(() => index = i),
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-        NavigationDestination(icon: Icon(Icons.play_circle_outline), selectedIcon: Icon(Icons.play_circle), label: 'Reels'),
-        NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Messages'),
-        NavigationDestination(icon: Icon(Icons.search), label: 'Search'),
-        NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
-      ],
-    ),
-  );
-  Future<void> createPost(BuildContext context) async {
-    final c = TextEditingController();
-    await showDialog(context: context, builder: (_) => AlertDialog(
-      title: const Text('Create Post'),
-      content: TextField(controller: c, maxLines: 5, decoration: const InputDecoration(hintText: 'What is on your mind?')),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: () async { await NexaService.createPost(c.text); if (context.mounted) Navigator.pop(context); }, child: const Text('Post')),
-      ],
-    ));
-    if (mounted) setState(() {});
-  }
-}
-
-class HomePage extends StatefulWidget { const HomePage({super.key}); @override State<HomePage> createState() => _HomePageState(); }
-class _HomePageState extends State<HomePage> {
-  late Future<List<Map<String,dynamic>>> future;
-  @override void initState(){super.initState(); future=NexaService.feed();}
-  @override Widget build(BuildContext context)=>FutureBuilder(
-    future: future, builder: (_, s) {
-      if(!s.hasData) return const Center(child:CircularProgressIndicator());
-      final posts=s.data!;
-      return RefreshIndicator(onRefresh:() async=>setState(()=>future=NexaService.feed()), child:ListView(
-        padding:const EdgeInsets.all(12), children:[
-          const Text('For You',style:TextStyle(fontSize:24,fontWeight:FontWeight.bold)),
-          const SizedBox(height:12),
-          SizedBox(height:45,child:ListView(scrollDirection:Axis.horizontal,children:const[
-            Chip(label:Text('Technology')),SizedBox(width:8),Chip(label:Text('Cars')),SizedBox(width:8),Chip(label:Text('Music')),SizedBox(width:8),Chip(label:Text('Travel')),
-          ])),
-          const SizedBox(height:12),
-          if(posts.isEmpty) const Card(child:Padding(padding:EdgeInsets.all(20),child:Text('No posts yet. Create the first NEXA post!'))),
-          ...posts.map((p)=>PostCard(post:p)),
-        ],
-      ));
-    });
-}
-class PostCard extends StatelessWidget {
-  final Map<String,dynamic> post; const PostCard({super.key,required this.post});
-  @override Widget build(BuildContext context){
-    final profile=post['profiles'] is Map ? post['profiles'] as Map : {};
-    return Card(margin:const EdgeInsets.only(bottom:12),child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Text((profile['display_name']??profile['username']??'NEXA').toString(),style:const TextStyle(fontWeight:FontWeight.bold)),
-      const SizedBox(height:8),Text((post['text']??'').toString()),
-      Row(children:[
-        IconButton(onPressed:()=>NexaService.like(post['id'].toString()),icon:const Icon(Icons.favorite_border)),
-        IconButton(onPressed:()=>_comment(context),icon:const Icon(Icons.comment_outlined)),
-        IconButton(onPressed:(){},icon:const Icon(Icons.repeat)),
-        IconButton(onPressed:(){},icon:const Icon(Icons.bookmark_border)),
-        const Spacer(),IconButton(onPressed:(){},icon:const Icon(Icons.more_horiz)),
-      ])
-    ])));
-  }
-  Future<void> _comment(BuildContext context) async {
-    final c=TextEditingController();
-    await showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('Comment'),content:TextField(controller:c),actions:[
-      TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),
-      FilledButton(onPressed:()async{await NexaService.comment(post['id'].toString(),c.text);if(context.mounted)Navigator.pop(context);},child:const Text('Send'))
-    ]));
-  }
-}
-class ReelsPage extends StatelessWidget{const ReelsPage({super.key});@override Widget build(BuildContext c)=>const Center(child:Text('NEXA Reels\\nInterest + AI discovery',textAlign:TextAlign.center,style:TextStyle(fontSize:24,fontWeight:FontWeight.bold)));}
-class MessagesPage extends StatelessWidget{const MessagesPage({super.key});@override Widget build(BuildContext c)=>ListView(children:const[
-  ListTile(leading:CircleAvatar(child:Icon(Icons.person)),title:Text('Chats'),subtitle:Text('1-to-1 messaging')),
-  ListTile(leading:CircleAvatar(child:Icon(Icons.groups)),title:Text('Communities'),subtitle:Text('Interest-based spaces')),
-  ListTile(leading:CircleAvatar(child:Icon(Icons.mark_email_unread_outlined)),title:Text('Requests'),subtitle:Text('Message requests')),
-]);}
-class SearchPage extends StatelessWidget{const SearchPage({super.key});@override Widget build(BuildContext c)=>Padding(padding:const EdgeInsets.all(16),child:Column(children:[
-  const TextField(decoration:InputDecoration(hintText:'Search NEXA or the web',prefixIcon:Icon(Icons.search),border:OutlineInputBorder())),
-  const SizedBox(height:20),const Text('AI Overview → Reels → Posts → People → Communities → Web',textAlign:TextAlign.center)
-]));}
-class ProfilePage extends StatelessWidget{const ProfilePage({super.key});@override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.all(16),children:[
-  const CircleAvatar(radius:44,child:Icon(Icons.person,size:44)),const SizedBox(height:12),
-  Text(NexaService.user?.email??'NEXA User',textAlign:TextAlign.center,style:const TextStyle(fontWeight:FontWeight.bold)),
-  const SizedBox(height:20),
-  FilledButton(onPressed:(){},child:const Text('Edit Profile')),
-  OutlinedButton(onPressed:()=>NexaService.signOut(),child:const Text('Log Out')),
-  OutlinedButton(onPressed:(){},child:const Text('Privacy & Security')),
-  OutlinedButton(onPressed:(){},child:const Text('Feed & AI Personalization')),
-]);}
