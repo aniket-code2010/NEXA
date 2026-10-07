@@ -4,16 +4,20 @@ workflows:
     max_build_duration: 60
 
     environment:
-      flutter: stable
+      flutter: 3.35.7
       groups:
         - supabase
       vars:
         PACKAGE_NAME: "com.nexa.app"
 
     scripts:
-      - name: Generate Android platform files
+      - name: Generate Android project
         script: |
-          flutter create --platforms=android .
+          flutter create \
+            --platforms=android \
+            --org com.nexa \
+            --project-name nexa \
+            .
 
       - name: Get Flutter packages
         script: |
@@ -21,9 +25,10 @@ workflows:
 
       - name: Build NEXA APK
         script: |
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          flutter build apk \
+            --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/flutter-apk/*.apk
