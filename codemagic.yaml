@@ -2,71 +2,36 @@ workflows:
   android-build:
     name: NEXA Android Build
     max_build_duration: 60
-
     environment:
       flutter: 3.35.7
       groups:
         - supabase
       vars:
         PACKAGE_NAME: "com.nexa.app"
-
     scripts:
-
       - name: Generate Android project
         script: |
-          flutter create \
-            --platforms=android \
-            --org com.nexa \
-            --project-name nexa \
-            .
-
+          flutter create --platforms=android --org com.nexa --project-name nexa .
       - name: Ensure Android Internet permission
         script: |
           FILE="android/app/src/main/AndroidManifest.xml"
-
           if ! grep -q 'android.permission.INTERNET' "$FILE"; then
-            sed -i.bak 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$FILE"
+            sed -i.bak 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\\n    <application#' "$FILE"
           fi
-
-          echo "Internet permission:"
           grep 'android.permission.INTERNET' "$FILE"
-
       - name: Verify Supabase configuration
         script: |
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "ERROR: SUPABASE_URL is missing"
-            exit 1
-          fi
-
-          if [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "ERROR: SUPABASE_ANON_KEY is missing"
-            exit 1
-          fi
-
+          test -n "$SUPABASE_URL" || (echo "ERROR: SUPABASE_URL is missing" && exit 1)
+          test -n "$SUPABASE_ANON_KEY" || (echo "ERROR: SUPABASE_ANON_KEY is missing" && exit 1)
           echo "Supabase configuration detected."
-
-      - name: Check Supabase DNS from build server
-        script: |
-          echo "Checking Supabase hostname..."
-
-          if command -v getent >/dev/null 2>&1; then
-            getent hosts zwctsgyxqbzpyutbfdbd.supabase.co || true
-          fi
-
-          if command -v nslookup >/dev/null 2>&1; then
-            nslookup zwctsgyxqbzpyutbfdbd.supabase.co || true
-          fi
-
       - name: Get Flutter packages
-        script: |
-          flutter pub get
-
+        script: flutter pub get
+      - name: Analyze Flutter code
+        script: flutter analyze --no-pub
       - name: Build NEXA APK
         script: |
-          flutter build apk \
-            --release \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+          flutter build apk --release \\
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \\
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
