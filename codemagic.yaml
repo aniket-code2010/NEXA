@@ -11,6 +11,7 @@ workflows:
         PACKAGE_NAME: "com.nexa.app"
 
     scripts:
+
       - name: Generate Android project
         script: |
           flutter create \
@@ -18,6 +19,43 @@ workflows:
             --org com.nexa \
             --project-name nexa \
             .
+
+      - name: Ensure Android Internet permission
+        script: |
+          FILE="android/app/src/main/AndroidManifest.xml"
+
+          if ! grep -q 'android.permission.INTERNET' "$FILE"; then
+            sed -i.bak 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$FILE"
+          fi
+
+          echo "Internet permission:"
+          grep 'android.permission.INTERNET' "$FILE"
+
+      - name: Verify Supabase configuration
+        script: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "ERROR: SUPABASE_URL is missing"
+            exit 1
+          fi
+
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "ERROR: SUPABASE_ANON_KEY is missing"
+            exit 1
+          fi
+
+          echo "Supabase configuration detected."
+
+      - name: Check Supabase DNS from build server
+        script: |
+          echo "Checking Supabase hostname..."
+
+          if command -v getent >/dev/null 2>&1; then
+            getent hosts zwctsgyxqbzpyutbfdbd.supabase.co || true
+          fi
+
+          if command -v nslookup >/dev/null 2>&1; then
+            nslookup zwctsgyxqbzpyutbfdbd.supabase.co || true
+          fi
 
       - name: Get Flutter packages
         script: |
