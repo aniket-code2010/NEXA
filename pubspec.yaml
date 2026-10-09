@@ -12,14 +12,5 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  flutter_launcher_icons: ^0.14.4
 flutter:
   uses-material-design: true
-  assets:
-    - assets/nexa_logo.png
-
-flutter_launcher_icons:
-  android: true
-  image_path: "assets/nexa_logo.png"
-  adaptive_icon_background: "#080817"
-  adaptive_icon_foreground: "assets/nexa_logo.png"
