@@ -1,64 +1,38 @@
+
 workflows:
-  android-build:
+  nexa-android:
     name: NEXA Android Build
     max_build_duration: 60
+    instance_type: linux_x2
+
     environment:
-      flutter: 3.35.7
-      groups:
-        - supabase
-      vars:
-        PACKAGE_NAME: "com.nexa.app"
+      flutter: stable
+
     scripts:
-      - name: Generate Android project
+      - name: Check Flutter installation
         script: |
-          flutter create --platforms=android --org com.nexa --project-name nexa .
-      - name: Add Android internet permission and NEXA auth deep link
+          flutter --version
+          dart --version
+
+      - name: Install dependencies
         script: |
-          python3 - <<'PYTHON'
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-          p = Path("android/app/src/main/AndroidManifest.xml")
-          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
-          ns = "{http://schemas.android.com/apk/res/android}"
-          tree = ET.parse(p)
-          root = tree.getroot()
-          if not any(x.get(ns + "name") == "android.permission.INTERNET" for x in root.findall("uses-permission")):
-              el = ET.Element("uses-permission")
-              el.set(ns + "name", "android.permission.INTERNET")
-              root.insert(0, el)
-          activity = next((a for a in root.iter("activity") if a.get(ns + "name", "").endswith("MainActivity")), None)
-          if activity is None:
-              raise SystemExit("ERROR: MainActivity not found in AndroidManifest.xml")
-          exists = any(
-              f.get("{http://schemas.android.com/apk/res/android}scheme") == "nexa"
-              and f.get("{http://schemas.android.com/apk/res/android}host") == "login-callback"
-              for intent in activity.findall("intent-filter")
-              for f in intent.findall("data")
-          )
-          if not exists:
-              intent = ET.SubElement(activity, "intent-filter")
-              ET.SubElement(intent, "action", {ns + "name": "android.intent.action.VIEW"})
-              ET.SubElement(intent, "category", {ns + "name": "android.intent.category.DEFAULT"})
-              ET.SubElement(intent, "category", {ns + "name": "android.intent.category.BROWSABLE"})
-              ET.SubElement(intent, "data", {ns + "scheme": "nexa", ns + "host": "login-callback"})
-          tree.write(p, encoding="utf-8", xml_declaration=True)
-          print("Internet permission and nexa://login-callback/ deep link configured.")
-          PYTHON
-      - name: Verify Supabase configuration
+          flutter pub get
+
+      - name: Verify launcher icon
         script: |
-          test -n "$SUPABASE_URL" || (echo "ERROR: SUPABASE_URL is missing" && exit 1)
-          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "ERROR: SUPABASE_PUBLISHABLE_KEY is missing" && exit 1)
-          echo "Supabase configuration detected."
-      - name: Get Flutter packages
-        script: flutter pub get
+          test -f assets/icon/nexa_icon.png
+
       - name: Generate NEXA launcher icon
-        script: dart run flutter_launcher_icons
-      - name: Analyze Flutter code
-        script: flutter analyze --no-pub
-      - name: Build NEXA APK
         script: |
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+          dart run flutter_launcher_icons
+
+      - name: Analyze Flutter code
+        script: |
+          flutter analyze
+
+      - name: Build release APK
+        script: |
+          flutter build apk --release
+
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/flutter-apk/app-release.apk
