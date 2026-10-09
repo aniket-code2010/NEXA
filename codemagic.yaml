@@ -26,6 +26,8 @@ workflows:
           echo "Supabase configuration detected."
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Generate NEXA launcher icon
+        script: dart run flutter_launcher_icons
       - name: Analyze Flutter code
         script: flutter analyze --no-pub
       - name: Build NEXA APK
