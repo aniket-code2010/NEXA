@@ -5,14 +5,12 @@ import 'services/nexa_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   const url = String.fromEnvironment('SUPABASE_URL');
-  const anon = String.fromEnvironment('SUPABASE_ANON_KEY');
   const publishable = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
-  final key = publishable.isNotEmpty ? publishable : anon;
 
-  if (url.isNotEmpty && key.isNotEmpty) {
-    await Supabase.initialize(url: url, anonKey: key);
+  if (url.isNotEmpty && publishable.isNotEmpty) {
+    await Supabase.initialize(url: url, publishableKey: publishable);
   }
-  runApp(NexaApp(configured: url.isNotEmpty && key.isNotEmpty));
+  runApp(NexaApp(configured: url.isNotEmpty && publishable.isNotEmpty));
 }
 
 class NexaApp extends StatefulWidget {
@@ -101,7 +99,7 @@ class SetupPage extends StatelessWidget {
         const NexaLogo(size: 78), const SizedBox(height: 22),
         const Text('NEXA', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 4)),
         const SizedBox(height: 12),
-        const Text('Supabase configuration is missing. Add SUPABASE_URL and SUPABASE_ANON_KEY to the Codemagic environment group.', textAlign: TextAlign.center),
+        const Text('Supabase configuration is missing. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to the Codemagic environment group.', textAlign: TextAlign.center),
       ]),
     )),
   );
@@ -357,14 +355,14 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
       const SizedBox(height: 20),
       const Text('Create a post', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
       const SizedBox(height: 14),
-      TextField(controller: _text, autofocus: true, maxLines: 5, maxLength: 2000, decoration: const InputDecoration(hintText: 'What’s on your mind?', alignLabelWithHint: true)),
+      TextField(controller: _text, autofocus: true, maxLines: 5, maxLength: 2000, decoration: const InputDecoration(hintText: 'What鈥檚 on your mind?', alignLabelWithHint: true)),
       const SizedBox(height: 10),
-      DropdownButtonFormField<String>(value: _visibility, decoration: const InputDecoration(labelText: 'Audience'), items: const [
+      DropdownButtonFormField<String>(initialValue: _visibility, decoration: const InputDecoration(labelText: 'Audience'), items: const [
         DropdownMenuItem(value: 'public', child: Text('Public')),
         DropdownMenuItem(value: 'followers', child: Text('Followers (requires follow privacy rules)')),
       ], onChanged: (v) => setState(() => _visibility = v ?? 'public')),
       const SizedBox(height: 14),
-      SizedBox(height: 50, child: FilledButton.icon(onPressed: _busy ? null : _submit, icon: const Icon(Icons.send_rounded), label: Text(_busy ? 'Posting…' : 'Publish post'))),
+      SizedBox(height: 50, child: FilledButton.icon(onPressed: _busy ? null : _submit, icon: const Icon(Icons.send_rounded), label: Text(_busy ? 'Posting鈥�' : 'Publish post'))),
     ]),
   );
 }
@@ -386,15 +384,17 @@ class _HomePageState extends State<HomePage> {
     child: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return ListView(children: const [SizedBox(height: 150), Center(child: CircularProgressIndicator()), SizedBox(height: 18), Center(child: Text('Loading your feed…'))]);
+        if (snap.connectionState == ConnectionState.waiting) return ListView(children: const [SizedBox(height: 150), Center(child: CircularProgressIndicator()), SizedBox(height: 18), Center(child: Text('Loading your feed鈥�'))]);
         if (snap.hasError) return ListView(children: [const SizedBox(height: 90), const Icon(Icons.cloud_off_rounded, size: 50), const SizedBox(height: 14), const Center(child: Text('Could not load the feed')), Padding(padding: const EdgeInsets.all(18), child: Text(NexaService.friendlyError(snap.error!), textAlign: TextAlign.center)), Center(child: FilledButton.tonal(onPressed: _refresh, child: const Text('Try again')))]);
         final posts = snap.data ?? [];
-        if (posts.isEmpty) return ListView(padding: const EdgeInsets.all(24), children: [
+        if (posts.isEmpty) {
+          return ListView(padding: const EdgeInsets.all(24), children: [
           const SizedBox(height: 70), const Center(child: NexaLogo(size: 66)), const SizedBox(height: 20),
           const Center(child: Text('Your feed starts here', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800))),
           const SizedBox(height: 8), const Center(child: Text('Be the first to share something with your NEXA community.', textAlign: TextAlign.center)),
-          const SizedBox(height: 20), Center(child: FilledButton.icon(onPressed: widget.onCreate, icon: const Icon(Icons.add), label: const Text('Create first post'))),
-        ]);
+            const SizedBox(height: 20), Center(child: FilledButton.icon(onPressed: widget.onCreate, icon: const Icon(Icons.add), label: const Text('Create first post'))),
+          ]);
+        }
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24), itemCount: posts.length,
           itemBuilder: (context, i) => PostCard(post: posts[i], onChanged: _refresh),
@@ -439,7 +439,7 @@ class _PostCardState extends State<PostCard> {
     final controller = TextEditingController();
     final body = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('Add a comment'),
-      content: TextField(controller: controller, autofocus: true, maxLines: 3, decoration: const InputDecoration(hintText: 'Write something kind…')),
+      content: TextField(controller: controller, autofocus: true, maxLines: 3, decoration: const InputDecoration(hintText: 'Write something kind鈥�')),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Post'))],
     ));
     controller.dispose();
@@ -448,17 +448,25 @@ class _PostCardState extends State<PostCard> {
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(NexaService.friendlyError(e)))); }
   }
   Future<void> _menu(String action) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      if (action == 'not_interested') await NexaService.notInterested(_id);
       if (action == 'report') {
         final reason = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(title: const Text('Report post'), children: [
           for (final r in ['Spam', 'Harassment', 'Harmful content', 'Other']) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, r), child: Text(r)),
         ]));
-        if (reason == null) return;
+        if (!mounted || reason == null) return;
         await NexaService.reportPost(_id, reason);
+        if (!mounted) return;
+        messenger.showSnackBar(const SnackBar(content: Text('Report submitted for review.')));
+        return;
       }
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(action == 'not_interested' ? 'We’ll show you less like this.' : 'Report submitted for review.'))); if (action == 'not_interested') widget.onChanged(); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(NexaService.friendlyError(e)))); }
+      if (action == 'not_interested') await NexaService.notInterested(_id);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('We鈥檒l show you less like this.')));
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(NexaService.friendlyError(e))));
+    }
   }
   @override
   Widget build(BuildContext context) {
@@ -472,7 +480,7 @@ class _PostCardState extends State<PostCard> {
           CircleAvatar(backgroundColor: theme.colorScheme.primaryContainer, child: Text(_name.isNotEmpty ? _name[0].toUpperCase() : 'N', style: TextStyle(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold))),
           const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(_name, style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text('@$_username${dateLabel.isEmpty ? '' : ' · $dateLabel'}', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            Text('@$_username${dateLabel.isEmpty ? '' : ' 路 $dateLabel'}', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
           ])),
           PopupMenuButton<String>(onSelected: _menu, itemBuilder: (_) => const [
             PopupMenuItem(value: 'not_interested', child: Text('Not interested')),
@@ -522,7 +530,7 @@ class MessagesPage extends StatelessWidget {
   Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: [
     Icon(Icons.forum_rounded, size: 64, color: Theme.of(context).colorScheme.primary),
     const SizedBox(height: 18), const Text('Your messages', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-    const SizedBox(height: 8), const Text('Messaging UI is prepared, but real 1:1/group chats need conversation and message tables plus their access policies. Those tables are not in the existing schema, so this screen won’t pretend chats are working yet.'),
+    const SizedBox(height: 8), const Text('Messaging UI is prepared, but real 1:1/group chats need conversation and message tables plus their access policies. Those tables are not in the existing schema, so this screen won鈥檛 pretend chats are working yet.'),
   ])));
 }
 
@@ -584,7 +592,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       const SizedBox(height: 14), Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
       Text('@${widget.profile['username'] ?? 'member'}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       if ('${widget.profile['bio'] ?? ''}'.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('${widget.profile['bio']}', textAlign: TextAlign.center)),
-      const SizedBox(height: 20), SizedBox(width: double.infinity, child: FilledButton(onPressed: _busy ? null : _follow, child: Text(_busy ? 'Please wait…' : _following ? 'Following' : 'Follow'))),
+      const SizedBox(height: 20), SizedBox(width: double.infinity, child: FilledButton(onPressed: _busy ? null : _follow, child: Text(_busy ? 'Please wait鈥�' : _following ? 'Following' : 'Follow'))),
     ])));
   }
 }
@@ -666,7 +674,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
       if (snap.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(NexaService.friendlyError(snap.error!))));
       final items = snap.data ?? [];
-      if (items.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('You’re all caught up.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700))));
+      if (items.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('You鈥檙e all caught up.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700))));
       return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, i) => ListTile(leading: const CircleAvatar(child: Icon(Icons.notifications_none)), title: Text('${items[i]['title'] ?? 'NEXA notification'}'), subtitle: Text('${items[i]['body'] ?? ''}'), trailing: items[i]['is_read'] == true ? null : const Icon(Icons.circle, size: 9)));
     },
   )));
@@ -698,15 +706,25 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Settings')), body: ListView(padding: const EdgeInsets.all(16), children: [
     const Text('APPEARANCE', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
     const SizedBox(height: 8),
-    RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: _mode, title: const Text('Use device setting'), onChanged: (v) { if (v != null) { setState(() => _mode = v); widget.setThemeMode(v); } }),
-    RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: _mode, title: const Text('Light'), onChanged: (v) { if (v != null) { setState(() => _mode = v); widget.setThemeMode(v); } }),
-    RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: _mode, title: const Text('Dark'), onChanged: (v) { if (v != null) { setState(() => _mode = v); widget.setThemeMode(v); } }),
+    RadioGroup<ThemeMode>(
+      groupValue: _mode,
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() => _mode = value);
+        widget.setThemeMode(value);
+      },
+      child: const Column(children: [
+        RadioListTile<ThemeMode>(value: ThemeMode.system, title: Text('Use device setting')),
+        RadioListTile<ThemeMode>(value: ThemeMode.light, title: Text('Light')),
+        RadioListTile<ThemeMode>(value: ThemeMode.dark, title: Text('Dark')),
+      ]),
+    ),
     const Divider(height: 28),
     const Text('PRIVACY', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
     SwitchListTile(value: _private, onChanged: _loading || _busy ? null : _togglePrivate, title: const Text('Private account'), subtitle: const Text('The setting is saved to your profile. Enforcement depends on the database policies in the migration.')),
     const Divider(height: 28),
     ListTile(leading: const Icon(Icons.lock_reset_rounded), title: const Text('Reset password'), subtitle: const Text('Send a reset email to your account'), onTap: () async { final email = NexaService.user?.email; if (email == null) return; try { await NexaService.resetPassword(email); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset email requested.'))); } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(NexaService.friendlyError(e)))); } }),
     ListTile(leading: const Icon(Icons.logout_rounded), title: const Text('Log out'), onTap: () async { try { await NexaService.signOut(); } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(NexaService.friendlyError(e)))); } }),
-    const SizedBox(height: 16), const Center(child: Text('NEXA · Build your world', style: TextStyle(fontWeight: FontWeight.w700))),
+    const SizedBox(height: 16), const Center(child: Text('NEXA 路 Build your world', style: TextStyle(fontWeight: FontWeight.w700))),
   ]));
 }
