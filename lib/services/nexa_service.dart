@@ -22,9 +22,12 @@ class NexaService {
     required String email, required String password,
     required String username, required String displayName,
   }) {
-    return db.auth.signUp(email: email, password: password, data: {
-      'username': username, 'display_name': displayName,
-    });
+    return db.auth.signUp(
+      email: email,
+      password: password,
+      data: {'username': username, 'display_name': displayName},
+      emailRedirectTo: 'nexa://login-callback/',
+    );
   }
 
   static Future<AuthResponse> signIn(String email, String password) =>
@@ -33,7 +36,7 @@ class NexaService {
   static Future<void> signOut() => db.auth.signOut();
 
   static Future<void> resetPassword(String email) =>
-      db.auth.resetPasswordForEmail(email);
+      db.auth.resetPasswordForEmail(email, redirectTo: 'nexa://login-callback/');
 
   static Future<void> ensureProfile({String? username, String? displayName}) async {
     final u = user;
